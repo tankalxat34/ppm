@@ -21,14 +21,37 @@ All commands:
     - exit              exit from ppm
 """
 
+import json
 import os
+import sys
 import pathlib
 import shutil
-from cli.main import Cli
-from cli.interface import calculate_bytes_size
-from package_parser.main import PackageParser
-from pypi_api.main import PyPi
-from ppm_config import PPM_NAME, PPM_GLOBAL_PATH, PPM_PROJECT_PATH, PPM_VERSION
+from site import getusersitepackages
+
+from utils.cli.main import Cli
+from utils.cli.tui import calculate_bytes_size
+from utils.package_parser.main import PackageParser
+from utils.pypi_api.main import PyPi
+
+
+USER_PLATFORM: str = sys.platform
+USER_VERSION_INFO = sys.version_info
+
+
+PPM_NAME = "Python Package Manager"
+PPM_VERSION = "1.1.0"
+PPM_CLI_TITLE = f"""{PPM_NAME} ({PPM_VERSION}) - {USER_PLATFORM} Python {USER_VERSION_INFO.major}.{USER_VERSION_INFO.minor}.{USER_VERSION_INFO.micro}"""
+
+
+PPM_PROJECT_PATH = pathlib.Path(os.getcwd(), "python_modules").absolute()
+PPM_GLOBAL_PATH = getusersitepackages()
+
+
+def loadPpmConfig() -> dict:
+    content: str
+    with open("./ppm.config.json", "r", encoding="utf-8") as config:
+        content = config.read()
+    return json.loads(content)
 
 
 def getSitePath(cli: Cli) -> str | pathlib.Path:
@@ -60,7 +83,7 @@ def install(cli: Cli):
         pypi = PyPi(package, version)
         pypi.fetch()
 
-        print(f"  Installing '{package}' ({pypi.json['info']['version']})...")
+        print(f"  Installing '{package}' ({pypi.json['info']['version']})")
 
         archive = pypi.fetchArchive()
         archiveSize = calculate_bytes_size(archive)
@@ -114,7 +137,10 @@ def view(cli: Cli):
         result: str = ""
 
         for key in KEYS:
-            result += f"{key}: {''.join(metadata[key])}\n"
+            try:
+                result += f"{key}: {''.join(metadata[key])}\n"
+            except Exception:
+                pass
 
         return result
     else:

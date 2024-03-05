@@ -20,3 +20,23 @@ def calculate_bytes_size(iobytes: BytesIO):
     if size / GB <= GB:
         return (round(size / GB, 1), " GB")
     return (0, " BYTES")
+
+
+class TextTable:
+    def __init__(self, dataframe: dict | list) -> None:
+        self.df = dataframe
+
+    def log(self) -> None:
+        pass
+
+
+if __name__ == "__main__":
+    # from .. import cli_config
+    from site import getusersitepackages
+    import os
+
+    PACKAGES: list = []
+
+    PPM_GLOBAL_PATH = getusersitepackages()
+
+    print(os.listdir(PPM_GLOBAL_PATH))

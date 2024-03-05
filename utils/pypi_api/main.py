@@ -4,11 +4,10 @@ import os
 import pathlib
 import sys
 import zipfile
-import urllib3
-
 from site import getusersitepackages
 
-from ppm_config import PPM_PROJECT_PATH, PPM_GLOBAL_PATH
+from . import urllib3
+from .. import config
 
 PYPI_JSON = "https://pypi.org/pypi/{name}/json"
 PYPI_VERSION_JSON = "https://pypi.org/pypi/{name}/{version}/json"
@@ -41,9 +40,12 @@ class PyPi:
     def fetchArchive(self):
         """Return `BytesIO` of archive"""
         for obj in self.json["urls"]:
-            if "whl" in obj["url"]:
+            if obj["packagetype"] == "bdist_wheel" and "whl" in obj["url"]:
                 return BytesIO(self.pm.request("GET", self.json["urls"][0]["url"]).data)
-        raise NameError("[ERROR] Link to download wheel not found")
+        raise NameError("Link to download wheel not found")
+
+    def setup(self, path: str | pathlib.Path):
+        return self.upackArchive(self.fetchArchive(), path)
 
 
 if __name__ == "__main__":
@@ -53,4 +55,4 @@ if __name__ == "__main__":
     pypi.fetch()
     print(pypi.json)
     # print(pypi.fetchArchive())
-    pypi.upackArchive(pypi.fetchArchive(), PPM_PROJECT_PATH)
+    pypi.upackArchive(pypi.fetchArchive(), config.PPM_PROJECT_PATH)

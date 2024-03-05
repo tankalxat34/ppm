@@ -79,3 +79,46 @@ class PackageParser:
     def isInstalled(self) -> bool:
         """Return `True` if package is installed"""
         return os.path.exists(pathlib.Path(self.path, self.getDistInfo()))
+
+
+"""
+pkginfo
+PasteDeploy
+zope.interface (>3.5.0)
+pywin32 >1.0; sys_platform == 'win32'
+brotli>=1.0.9; (platform_python_implementation == 'CPython') and extra == 'brotli'
+brotlicffi>=0.8.0; (platform_python_implementation != 'CPython') and extra == 'brotli'
+h2<5,>=4; extra == 'h2'
+pysocks!=1.5.7,<2.0,>=1.5.6; extra == 'socks'
+zstandard>=0.18.0; extra == 'zstd'
+"""
+
+
+class Requirement:
+    def __init__(self, requirementString: str) -> None:
+        self.reqStr = requirementString
+
+        self.name = re.match(r"\w[a-zA-Z0-9]+", self.reqStr)
+        print(self.name.span())
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
+
+
+if __name__ == "__main__":
+    from packaging.requirements import Requirement as Req
+    from packaging.version import Version
+
+    req = Requirement("pysocks[all, pdf]!=1.5.7,<2.0,>=1.5.6; extra == 'socks'")
+    print(req)
+
+    # req = Req("pysocks[all, pdf]!=1.5.7,<2.0,>=1.5.6; extra == 'socks'")
+    # print(f"{req.extras = }")
+    # print(f"{req.marker = }")
+    # print(f"{req.name = }")
+    # print(f"{req.specifier = }")
+    # print(f"{req.url = }")
+
+    # ver = Version("1.0.9")
+    # ver2 = Version("1.1.12")
+    # print(ver.dev)
