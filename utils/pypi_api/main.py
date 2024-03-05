@@ -14,10 +14,9 @@ PYPI_VERSION_JSON = "https://pypi.org/pypi/{name}/{version}/json"
 
 
 class PyPi:
-    def __init__(self, packageName: str, packageVersion: str = "") -> None:
+    def __init__(self, packageName: str) -> None:
         self.pm = urllib3.PoolManager()
         self.name = packageName
-        self.version = packageVersion
 
         self.json = dict()
 
@@ -29,23 +28,26 @@ class PyPi:
 
     def fetch(self):
         """Needs to perform before any action"""
-        url = (
-            PYPI_JSON.format(name=self.name)
-            if (not self.version)
-            else PYPI_VERSION_JSON.format(name=self.name, version=self.version)
-        )
+        url = PYPI_JSON.format(name=self.name)
         self.json = json.loads(self.pm.request("GET", url).data)
         return self.json
 
-    def fetchArchive(self):
+    def releases(self) -> list[str]:
+        """Return the list of existing versions"""
+        return list(self.json["releases"].keys())
+
+    def fetchArchive(self, version: str = ""):
         """Return `BytesIO` of archive"""
-        for obj in self.json["urls"]:
+        parentObj = (
+            self.json["urls"] if not version else self.json["releases"].get(version)
+        )
+        for obj in parentObj:
             if obj["packagetype"] == "bdist_wheel" and "whl" in obj["url"]:
-                return BytesIO(self.pm.request("GET", self.json["urls"][0]["url"]).data)
+                return BytesIO(self.pm.request("GET", parentObj[0]["url"]).data)
         raise NameError("Link to download wheel not found")
 
-    def setup(self, path: str | pathlib.Path):
-        return self.upackArchive(self.fetchArchive(), path)
+    def setup(self, path: str | pathlib.Path, version: str = ""):
+        return self.upackArchive(self.fetchArchive(version), path)
 
 
 if __name__ == "__main__":

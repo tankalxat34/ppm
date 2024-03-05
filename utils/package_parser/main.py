@@ -69,7 +69,10 @@ class PackageParser:
         return list(map(_parse, content))
 
     def getMetadata(self):
-        """Returns parsed content from file `*.dist-info/METADATA`"""
+        """Returns parsed content from file `*.dist-info/METADATA`
+
+        [About METADATA](https://packaging.python.org/en/latest/specifications/core-metadata/)
+        """
         return self._readAsMetadataSyntax("METADATA")
 
     def getWheel(self):
@@ -78,7 +81,7 @@ class PackageParser:
 
     def isInstalled(self) -> bool:
         """Return `True` if package is installed"""
-        return os.path.exists(pathlib.Path(self.path, self.getDistInfo()))
+        return os.path.exists(pathlib.Path(self.path, self.getDistInfo().lower()))
 
 
 """
@@ -94,30 +97,32 @@ zstandard>=0.18.0; extra == 'zstd'
 """
 
 
-class Requirement:
-    def __init__(self, requirementString: str) -> None:
-        self.reqStr = requirementString
-
-        self.name = re.match(r"\w[a-zA-Z0-9]+", self.reqStr)
-        print(self.name.span())
-
-    def __str__(self) -> str:
-        return str(self.__dict__)
-
-
 if __name__ == "__main__":
     from packaging.requirements import Requirement as Req
     from packaging.version import Version
+    from packaging.markers import Marker
+    from packaging.specifiers import Specifier
 
-    req = Requirement("pysocks[all, pdf]!=1.5.7,<2.0,>=1.5.6; extra == 'socks'")
-    print(req)
+    reqStr = "ujson[all]!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0,>=4.0.1; extra == 'all'"
+    # reqStr = "email-validator>=2.0.0; extra == 'all'"
+    # reqStr = "pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4"
+    # reqStr = "requests~=0.1.2"
 
-    # req = Req("pysocks[all, pdf]!=1.5.7,<2.0,>=1.5.6; extra == 'socks'")
-    # print(f"{req.extras = }")
-    # print(f"{req.marker = }")
-    # print(f"{req.name = }")
-    # print(f"{req.specifier = }")
-    # print(f"{req.url = }")
+    req = Req(reqStr)
+    print(f"{req.extras = }", "all" in req.extras)
+    print(f"{req.marker = }")
+    print(f"{req.name = }")
+    print(f"{req.specifier = }")
+    print(f"{req.url = }")
+
+    # print(req.marker.evaluate())
+    # print(*req.specifier.filter(["0.2.0", "0.9.1"]))
+    # print(req.specifier.contains("0.2.23"))
+    print(f"{req.marker and req.marker.evaluate() = }")
+    print(req.marker)
+
+    # marker = Marker("extra == 'bar'")
+    # print(marker.evaluate({"extra": "bar"}))
 
     # ver = Version("1.0.9")
     # ver2 = Version("1.1.12")

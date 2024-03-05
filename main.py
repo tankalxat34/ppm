@@ -26,5 +26,6 @@ if __name__ == "__main__":
                 f"[ERROR] An unknown command '{cli.cmd}' or a command was executed with an error. See the logs below:",
             )
             print(str(error))
+            # print(error.with_traceback())
 
         print()

@@ -27,11 +27,17 @@ import sys
 import pathlib
 import shutil
 from site import getusersitepackages
+from typing import Set
 
 from utils.cli.main import Cli
 from utils.cli.tui import calculate_bytes_size
 from utils.package_parser.main import PackageParser
+from utils.package_parser.packaging.markers import Marker
 from utils.pypi_api.main import PyPi
+from utils.package_parser.packaging.requirements import Requirement
+
+# from utils.package_parser.packaging.version import Version
+# from utils.package_parser.packaging.markers import Marker
 
 
 USER_PLATFORM: str = sys.platform
@@ -54,52 +60,101 @@ def loadPpmConfig() -> dict:
     return json.loads(content)
 
 
+def checkExtras(exParent, exCurrent):
+    for parent in exParent:
+        print("    Checking extra", parent, "in", exCurrent, parent in exCurrent)
+        if parent in exCurrent:
+            return True
+    return False
+
+
 def getSitePath(cli: Cli) -> str | pathlib.Path:
     """Returns path to `site-packages` dir when alias `-g` in CLI command"""
     return PPM_GLOBAL_PATH if ("g" in cli.aliases) else PPM_PROJECT_PATH
 
 
-def install(cli: Cli):
+def install(
+    cli: Cli,
+    _installedPackages: list[str] = [],
+):
     PPM_PATH = getSitePath(cli)
     packages = cli.arguments[1:]
-    installedPackages: list[str] = []
 
-    for pack in packages:
-        if "@" in pack:
-            package, version = pack.split("@")[0], pack.split("@")[1]
-        else:
-            package, version = pack, ""
+    if not len(packages):
+        raise NameError("You does not provide package names")
+
+    for position, pack in enumerate(packages):
+        requirement = Requirement(pack.replace(";", ""))
+        package = requirement.name
+
+        # if _marker and _marker.evaluate()
 
         try:
-            if PackageParser(PPM_PATH, package).isInstalled():
+            if PackageParser(PPM_PATH, package.lower()).isInstalled():
                 print(
-                    f"  Package '{package}' has been skipped because it also installed"
+                    f"Package '{package}' has been skipped because it's installed before"
                 )
                 continue
         except Exception:
             pass
 
-        print(f"Collecting '{package}'")
-        pypi = PyPi(package, version)
+        print(f"Collecting '{requirement}'")
+        pypi = PyPi(package)
         pypi.fetch()
+        releases = pypi.releases()
 
-        print(f"  Installing '{package}' ({pypi.json['info']['version']})")
+        version: str
+        for release in releases[::-1]:
+            if requirement.specifier.contains(release):
+                version = release
+                break
 
-        archive = pypi.fetchArchive()
+        print(f"  Installing {package}=={version}")
+
+        archive = pypi.fetchArchive(version)
         archiveSize = calculate_bytes_size(archive)
         print(f"  Package size is {(archiveSize)[0]}{archiveSize[1]}")
 
         pypi.upackArchive(archive, PPM_PATH)
 
-        installedPackages.append(package + version)
         print(f"  Successfully unpacked to '{PPM_PATH}'")
+        _installedPackages.append(package + "-" + str(version))
+        # _installedPackages.append(package)
 
-    return f"Complete installing packages: {' '.join(installedPackages)}"
+        if pypi.json["info"]["requires_dist"] and (
+            "--no-deps" not in tuple(cli.options.keys())
+        ):
+            for req_dist in pypi.json["info"]["requires_dist"]:
+                child_requirement = Requirement(req_dist)
+
+                if (not bool(child_requirement.marker)) or (
+                    child_requirement.marker
+                    and child_requirement.marker.evaluate(
+                        {"extra": list(requirement.extras)[0]}
+                        if requirement.extras
+                        else None
+                    )
+                ):
+                    try:
+                        install(
+                            Cli(f"ppm install {req_dist}"),
+                            _installedPackages,
+                        )
+                    except Exception:
+                        pass
+        # else:
+        #     break
+
+    return f"Complete installing packages: {' '.join(set(_installedPackages))}"
 
 
 def uninstall(cli: Cli):
     PPM_PATH = getSitePath(cli)
     packages = cli.arguments[1:]
+
+    if not len(packages):
+        raise NameError("You does not provide package names")
+
     for package in packages:
         packageParser = PackageParser(PPM_PATH, package)
 
@@ -117,7 +172,7 @@ def uninstall(cli: Cli):
             pass
 
         print(
-            f"  Package '{package}' ({''.join(metadata['Version'])}) successfully deleted"
+            f"  Package {package}=={''.join(metadata['Version'])} successfully deleted"
         )
 
     return f"Successfully uninstalled {' '.join(packages)}"
@@ -150,9 +205,12 @@ def view(cli: Cli):
         )
 
 
-def update(cli: Cli):
+def upgrade(cli: Cli):
     PPM_PATH = getSitePath(cli)
     packages = cli.arguments[1:]
+
+    if not len(packages):
+        raise NameError("You does not provide package names")
 
     print(f"Updating packages {' '.join(packages)}")
 
@@ -162,14 +220,23 @@ def update(cli: Cli):
     return f"Successfully updated packages: {' '.join(packages)}"
 
 
+def releases(cli: Cli):
+    pypi = PyPi(cli.arguments[1])
+    pypi.fetch()
+    releases = pypi.releases()
+
+    return "\n".join(releases)
+
+
 CLI_CONFIG = {
     # command
     "ppm": {
         # arguments
-        "install": lambda cli: install(cli),
+        "install": lambda cli: install(cli, []),
         "uninstall": lambda cli: uninstall(cli),
-        "update": lambda cli: update(cli),
+        "upgrade": lambda cli: upgrade(cli),
         "view": lambda cli: view(cli),
+        "releases": lambda cli: releases(cli),
         "help": lambda cli: __doc__,
         "config": lambda cli: f"""{PPM_NAME}
 Version: {PPM_VERSION}

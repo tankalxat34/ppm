@@ -12,7 +12,7 @@ import re
 class Cli:
     def __init__(self, commandString: str):
         cmdParts = commandString.split(" ")
-        _strOptions = re.findall(r"\-\-\w+=?", commandString)  # \-\-\w+=?(\".+\")*
+        _strOptions = re.findall(r"\-\-\S+=?", commandString)  # \-\-\w+=?(\".+\")*
 
         self.command: str = cmdParts[0]
         self.arguments: list[str] = []
@@ -39,6 +39,6 @@ class Cli:
 
 if __name__ == "__main__":
     # command = Cli('git commit -h --message="commit message" --file=text.txt')
-    command = Cli("ppm install -g requests@2.30.0")
+    command = Cli("ppm install importlib-metadata")
 
     print(command.__dict__)
