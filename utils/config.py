@@ -44,7 +44,7 @@ PPM_NAME = "Python Package Manager"
 PPM_VERSION = "1.2.0"
 PPM_CLI_TITLE = f"""{PPM_NAME} ({PPM_VERSION}) - {USER_PLATFORM} Python {USER_VERSION_INFO.major}.{USER_VERSION_INFO.minor}.{USER_VERSION_INFO.micro}"""
 
-PPM_VENV_PATH = pathlib.Path(os.getcwd(), "venv", "Lib", "site-packages").absolute()
+PPM_VENV_PATH = pathlib.Path(os.getcwd(), "venv", "lib", "site-packages").absolute()
 PPM_PROJECT_PATH = (
     pathlib.Path(os.getcwd(), "python_modules").absolute()
     if not os.path.exists(PPM_VENV_PATH)
@@ -129,7 +129,7 @@ def install(
         _installedPackages.append(package + "-" + str(version))
 
         if pypi.json["info"]["requires_dist"] and (
-            "--no-deps" not in tuple(cli.options.keys())
+            "no-deps" not in tuple(cli.options.keys())
         ):
             for req_dist in pypi.json["info"]["requires_dist"]:
                 child_requirement = Requirement(req_dist)
@@ -248,6 +248,17 @@ def releases(cli: Cli):
     return "\n".join(releases)
 
 
+def _createVenv(cli: Cli):
+    return "Creation venv"
+
+
+def initialize(cli: Cli):
+    PPM_PATH = getSitePath(cli)
+
+    if not os.path.exists(PPM_VENV_PATH):
+        response = input("It seems")
+
+
 CLI_CONFIG = {
     # command
     "ppm": {
@@ -257,6 +268,7 @@ CLI_CONFIG = {
         "upgrade": lambda cli: upgrade(cli),
         "view": lambda cli: view(cli),
         "releases": lambda cli: releases(cli),
+        "init": lambda cli: initialize(cli),
         "help": lambda cli: __doc__,
         "config": lambda cli: f"""{PPM_NAME}
 Version: {PPM_VERSION}

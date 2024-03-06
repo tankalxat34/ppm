@@ -33,12 +33,20 @@ class Cli:
             if (arg[0] != "-") and (arg != self.command) and (arg not in _strOptions):
                 self.arguments.append(arg)
 
+    @staticmethod
+    def input(
+        message: str, options: list[dict[str, str]] = [], defaultOption: str = ""
+    ):
+        """Custom input wrapper"""
+        # return input(f"{message} ({', '.join(options)})")
+        return input(f"{message}: ")
+
     def __str__(self) -> str:
         return self.cmd
 
 
 if __name__ == "__main__":
     # command = Cli('git commit -h --message="commit message" --file=text.txt')
-    command = Cli("ppm install importlib-metadata")
+    command = Cli("ppm install importlib-metadata --no-deps")
 
     print(command.__dict__)
