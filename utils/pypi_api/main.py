@@ -6,6 +6,7 @@ import sys
 import zipfile
 from site import getusersitepackages
 
+
 from . import urllib3
 from .. import config
 
@@ -34,7 +35,8 @@ class PyPi:
 
     def releases(self) -> list[str]:
         """Return the list of existing versions"""
-        return list(self.json["releases"].keys())
+        releasesObjects: list[str] = self.json["releases"]
+        return releasesObjects
 
     def fetchArchive(self, version: str = ""):
         """Return `BytesIO` of archive"""
@@ -43,6 +45,7 @@ class PyPi:
         )
         for obj in parentObj:
             if obj["packagetype"] == "bdist_wheel" and "whl" in obj["url"]:
+                print("  Fetching wheel", f"'{parentObj[0]['filename']}'")
                 return BytesIO(self.pm.request("GET", parentObj[0]["url"]).data)
         raise NameError("Link to download wheel not found")
 
@@ -52,9 +55,6 @@ class PyPi:
 
 if __name__ == "__main__":
     # print(PPM_PATH)
-    pypi = PyPi("numpy")
-
+    # pass
+    pypi = PyPi("pip")
     pypi.fetch()
-    print(pypi.json)
-    # print(pypi.fetchArchive())
-    pypi.upackArchive(pypi.fetchArchive(), config.PPM_PROJECT_PATH)

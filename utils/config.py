@@ -36,21 +36,28 @@ from utils.package_parser.packaging.markers import Marker
 from utils.pypi_api.main import PyPi
 from utils.package_parser.packaging.requirements import Requirement
 
-# from utils.package_parser.packaging.version import Version
-# from utils.package_parser.packaging.markers import Marker
-
-
 USER_PLATFORM: str = sys.platform
 USER_VERSION_INFO = sys.version_info
 
 
 PPM_NAME = "Python Package Manager"
-PPM_VERSION = "1.1.0"
+PPM_VERSION = "1.2.0"
 PPM_CLI_TITLE = f"""{PPM_NAME} ({PPM_VERSION}) - {USER_PLATFORM} Python {USER_VERSION_INFO.major}.{USER_VERSION_INFO.minor}.{USER_VERSION_INFO.micro}"""
 
-
-PPM_PROJECT_PATH = pathlib.Path(os.getcwd(), "python_modules").absolute()
+PPM_VENV_PATH = pathlib.Path(os.getcwd(), "venv", "Lib", "site-packages").absolute()
+PPM_PROJECT_PATH = (
+    pathlib.Path(os.getcwd(), "python_modules").absolute()
+    if not os.path.exists(PPM_VENV_PATH)
+    else PPM_VENV_PATH
+)
 PPM_GLOBAL_PATH = getusersitepackages()
+
+
+def convertPackageName(name: str):
+    REPLACE_MASK = {"-": "_"}
+    for frm, t in REPLACE_MASK.items():
+        result = name.replace(frm, t)
+    return result
 
 
 def loadPpmConfig() -> dict:
@@ -103,11 +110,12 @@ def install(
         pypi.fetch()
         releases = pypi.releases()
 
-        version: str
-        for release in releases[::-1]:
-            if requirement.specifier.contains(release):
-                version = release
-                break
+        version: str = pypi.json["info"]["version"]
+        if not requirement.specifier.contains(version):
+            for release in releases[::-1]:
+                if requirement.specifier.contains(release):
+                    version = release
+                    break
 
         print(f"  Installing {package}=={version}")
 
@@ -119,7 +127,6 @@ def install(
 
         print(f"  Successfully unpacked to '{PPM_PATH}'")
         _installedPackages.append(package + "-" + str(version))
-        # _installedPackages.append(package)
 
         if pypi.json["info"]["requires_dist"] and (
             "--no-deps" not in tuple(cli.options.keys())
@@ -136,21 +143,27 @@ def install(
                     )
                 ):
                     try:
+                        joinedAliases = "-" + " -".join(cli.aliases)
+                        requires_dist_cmd = (
+                            f"ppm install {joinedAliases} {req_dist.replace(' ', '')}"
+                        )
                         install(
-                            Cli(f"ppm install {req_dist}"),
+                            Cli(requires_dist_cmd),
                             _installedPackages,
                         )
                     except Exception:
                         pass
-        # else:
-        #     break
 
-    return f"Complete installing packages: {' '.join(set(_installedPackages))}"
+    return (
+        f"Complete installing packages: {' '.join(set(_installedPackages))}"
+        if len(_installedPackages)
+        else ""
+    )
 
 
 def uninstall(cli: Cli):
     PPM_PATH = getSitePath(cli)
-    packages = cli.arguments[1:]
+    packages = tuple(map(lambda x: convertPackageName(x), cli.arguments[1:]))
 
     if not len(packages):
         raise NameError("You does not provide package names")
@@ -180,9 +193,16 @@ def uninstall(cli: Cli):
 
 def view(cli: Cli):
     PPM_PATH = getSitePath(cli)
-    KEYS = ["Name", "Version", "Summary", "Home-page", "Author", "Author-email"]
+    KEYS = [
+        "Name",
+        "Version",
+        "Summary",
+        "Home-page",
+        "Author",
+        "Author-email",
+    ]
     if len(cli.arguments) >= 2:
-        package = cli.arguments[1]
+        package = convertPackageName(cli.arguments[1])
         packageParser = PackageParser(PPM_PATH, package)
 
         distinfo = packageParser.getDistInfo()
@@ -197,7 +217,7 @@ def view(cli: Cli):
             except Exception:
                 pass
 
-        return result
+        return result + f"Installed to: {pathlib.Path(PPM_PATH, package)}"
     else:
         listdir = os.listdir(PPM_PATH)
         return (
@@ -207,7 +227,7 @@ def view(cli: Cli):
 
 def upgrade(cli: Cli):
     PPM_PATH = getSitePath(cli)
-    packages = cli.arguments[1:]
+    packages = tuple(map(lambda name: convertPackageName(name), cli.arguments[1:]))
 
     if not len(packages):
         raise NameError("You does not provide package names")

@@ -153,3 +153,5 @@ cython_debug/
 
 site-packages/
 python_modules/
+test*
+.vscode*
