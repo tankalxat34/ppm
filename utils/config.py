@@ -27,14 +27,13 @@ import sys
 import pathlib
 import shutil
 from site import getusersitepackages
-from typing import Set
 
+from utils.pypi_api.main import PyPi
 from utils.cli.main import Cli
 from utils.cli.tui import calculate_bytes_size
 from utils.package_parser.main import PackageParser
-from utils.package_parser.packaging.markers import Marker
-from utils.pypi_api.main import PyPi
 from utils.package_parser.packaging.requirements import Requirement
+from utils.decorators.handlers import handle_KeyboardInterrupt
 
 USER_PLATFORM: str = sys.platform
 USER_VERSION_INFO = sys.version_info
@@ -44,7 +43,11 @@ PPM_NAME = "Python Package Manager"
 PPM_VERSION = "1.2.0"
 PPM_CLI_TITLE = f"""{PPM_NAME} ({PPM_VERSION}) - {USER_PLATFORM} Python {USER_VERSION_INFO.major}.{USER_VERSION_INFO.minor}.{USER_VERSION_INFO.micro}"""
 
-PPM_VENV_PATH = pathlib.Path(os.getcwd(), "venv", "lib", "site-packages").absolute()
+PPM_DEFAULT_VENV_DIR_NAME = "venv"
+PPM_CREATE_VENV_CMD = f"python -m venv {PPM_DEFAULT_VENV_DIR_NAME}"
+PPM_CONFIG_JSON = "ppm.config.json"
+PPM_REQUIREMENTS_TXT = "requirements.txt"
+PPM_VENV_PATH = pathlib.Path(os.getcwd(), PPM_DEFAULT_VENV_DIR_NAME, "lib", "site-packages").absolute()
 PPM_PROJECT_PATH = (
     pathlib.Path(os.getcwd(), "python_modules").absolute()
     if not os.path.exists(PPM_VENV_PATH)
@@ -62,7 +65,7 @@ def convertPackageName(name: str):
 
 def loadPpmConfig() -> dict:
     content: str
-    with open("./ppm.config.json", "r", encoding="utf-8") as config:
+    with open(f"./{PPM_CONFIG_JSON}", "r", encoding="utf-8") as config:
         content = config.read()
     return json.loads(content)
 
@@ -252,11 +255,33 @@ def _createVenv(cli: Cli):
     return "Creation venv"
 
 
+@handle_KeyboardInterrupt
 def initialize(cli: Cli):
     PPM_PATH = getSitePath(cli)
+    yesStatus = "y" in cli.aliases or "yes" in cli.options
+        
 
     if not os.path.exists(PPM_VENV_PATH):
-        response = input("It seems")
+        userInputSetupVenv = Cli.stdin("Would you like to setup Python venv?", ["y", "n"], errorIfUnknownOption=True)
+        if userInputSetupVenv == "y":
+            print(f"Creating virtual environment using command '{PPM_CREATE_VENV_CMD}'")
+            os.system(PPM_CREATE_VENV_CMD)
+            print(f"Virtual environment created at '{PPM_VENV_PATH}'")
+
+    userResp = {
+        "name": Cli.stdin("Project name", [os.path.basename(os.getcwd())], useDefault=yesStatus),
+        "version": Cli.stdin("Version", ["1.0.0"], useDefault=yesStatus),
+        "main": Cli.stdin("Main script", ["main.py"], useDefault=yesStatus),
+        "has_requirements_txt": Cli.stdin("Do you want to dublicate project dependencies to 'requirements.txt'", ["y", 'n'], errorIfUnknownOption=True, useDefault=yesStatus),
+        "summary": Cli.stdin("Summary", [""], useDefault=yesStatus),
+        "keywords": Cli.stdin("Keywords", [""], useDefault=yesStatus),
+        "author": Cli.stdin("Author", [""], useDefault=yesStatus),
+        "license": Cli.stdin("License", ["ISC"], useDefault=yesStatus),
+    }
+
+    with open(PPM_CONFIG_JSON, "w") as config:
+        config.write(json.dumps(userResp, indent=2))
+    return f"Created {PPM_CONFIG_JSON} with content:\n" + json.dumps(userResp, indent=2)
 
 
 CLI_CONFIG = {

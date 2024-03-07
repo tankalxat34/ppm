@@ -22,10 +22,9 @@ if __name__ == "__main__":
                 print(utils.config.CLI_CONFIG[cli.command](cli))
 
         except Exception as error:
-            # print(
-            #     f"[ERROR] An unknown command '{cli.cmd}' or a command was executed with an error. See the logs below:",
-            # )
-            print("[ERROR]", str(error))
-            # print(error.with_traceback())
+            if ("debug" in cli.options):
+                print(error.with_traceback())
+            else:
+                print("[ERROR]", str(error))
 
         print()

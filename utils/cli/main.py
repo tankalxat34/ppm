@@ -34,12 +34,22 @@ class Cli:
                 self.arguments.append(arg)
 
     @staticmethod
-    def input(
-        message: str, options: list[dict[str, str]] = [], defaultOption: str = ""
+    def stdin(
+        message: str, options: list[str] = [], defaultOption: str | int= 0, errorIfUnknownOption: bool = False, useDefault: bool = False
     ):
         """Custom input wrapper"""
-        # return input(f"{message} ({', '.join(options)})")
-        return input(f"{message}: ")
+        if type(defaultOption) == int:
+            defaultOption = options[defaultOption]
+
+        if (useDefault):
+            return defaultOption
+        
+        response = input(f"{message} ({', '.join((map(lambda x: x.upper() if x == defaultOption else x, options)))})" + ": ") or defaultOption
+        
+        if len(options) and (response not in options) and errorIfUnknownOption:
+            raise ValueError(f"Unknown option '{response}'") 
+        
+        return response
 
     def __str__(self) -> str:
         return self.cmd
@@ -48,5 +58,6 @@ class Cli:
 if __name__ == "__main__":
     # command = Cli('git commit -h --message="commit message" --file=text.txt')
     command = Cli("ppm install importlib-metadata --no-deps")
+    print("no-deps" in command.options)
 
-    print(command.__dict__)
+    # print(command.__dict__)
