@@ -18,9 +18,13 @@ if __name__ == "__main__":
         cli = Cli(input(">>>"))
         try:
             if len(cli.arguments):
-                print(utils.config.CLI_CONFIG[cli.command][cli.arguments[0]](cli))
+                resp = utils.config.CLI_CONFIG[cli.command][cli.arguments[0]](cli)
+                if resp:
+                    Cli.stdout(resp, prefix=Prefix.INFO)
             else:
-                print(utils.config.CLI_CONFIG[cli.command](cli))
+                resp = utils.config.CLI_CONFIG[cli.command](cli)
+                if resp:
+                    Cli.stdout(resp, prefix=Prefix.INFO)
 
         except Exception as error:
             # print(error.with_traceback())

@@ -15,9 +15,14 @@ class Prefix(object):
     ERROR = "ERROR"
 
 
+class Options(object):
+    YESNO = ["y", "n"]
+    NOYES = ["n", "y"]
+
+
 class Cli:
     def __init__(self, commandString: str):
-        cmdParts = commandString.split(" ")
+        cmdParts = tuple(map(lambda x: x.strip(), commandString.split(" ")))
         _strOptions = re.findall(r"\-\-\S+=?", commandString)  # \-\-\w+=?(\".+\")*
 
         self.command: str = cmdParts[0]

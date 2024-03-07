@@ -37,11 +37,11 @@ from utils.constants import (
 
 from utils.ppm_config_parser.main import REQUIRES_DIST, PpmConfig
 from utils.pypi_api.main import PyPi
-from utils.cli.main import Cli, Prefix
+from utils.cli.main import Cli, Options, Prefix
 from utils.cli.tui import calculate_bytes_size
 from utils.package_parser.main import PackageParser
 from utils.package_parser.packaging.requirements import Requirement
-from utils.decorators.handlers import handle_KeyboardInterrupt
+from utils.decorators.handlers import handle_AskBeforeStart, handle_KeyboardInterrupt
 
 
 def loadPpmConfig() -> dict:
@@ -262,7 +262,12 @@ def releases(cli: Cli):
 
 
 def _createVenv(cli: Cli):
-    return "Creation venv"
+    Cli.stdout(
+        f"Creating virtual environment using command '{PPM_CREATE_VENV_CMD}'",
+        level=1,
+    )
+    os.system(PPM_CREATE_VENV_CMD)
+    Cli.stdout(f"Virtual environment created at '{PPM_VENV_PATH}'", level=1)
 
 
 @handle_KeyboardInterrupt
@@ -270,19 +275,23 @@ def initialize(cli: Cli):
     PPM_PATH = getSitePath(cli)
     yesStatus = "y" in cli.aliases or "yes" in cli.options
 
+    if os.path.exists(PPM_CONFIG_JSON):
+        userInputReinitProject = Cli.stdin(
+            "You have completed `ppm.config.json` for this project. You want to reinitialize it?",
+            Options.NOYES,
+            errorIfUnknownOption=True,
+        )
+        if userInputReinitProject == "n":
+            return "Cancelled reinitialisation of the PPM project"
+
     if not os.path.exists(PPM_VENV_PATH):
         userInputSetupVenv = Cli.stdin(
             "Would you like to setup Python venv?",
-            ["y", "n"],
+            Options.YESNO,
             errorIfUnknownOption=True,
         )
         if userInputSetupVenv == "y":
-            Cli.stdout(
-                f"Creating virtual environment using command '{PPM_CREATE_VENV_CMD}'",
-                level=1,
-            )
-            os.system(PPM_CREATE_VENV_CMD)
-            Cli.stdout(f"Virtual environment created at '{PPM_VENV_PATH}'", level=1)
+            _createVenv(cli)
 
     userResp = {
         "name": Cli.stdin(
@@ -310,6 +319,20 @@ def freeze(cli: Cli):
     return CONFIG.freeze(cli)
 
 
+@handle_AskBeforeStart
+def makedeps(cli: Cli):
+    PPM_PATH = getSitePath(cli)
+    CONFIG = PpmConfig()
+
+    installed_packages = getInstalledPackages(cli)
+    for pack in installed_packages:
+        CONFIG.addRequirement(Requirement(pack))
+
+    return (
+        f"All installed packages has been added to `ppm.config.json` from '{PPM_PATH}'"
+    )
+
+
 CLI_CONFIG = {
     # command
     "ppm": {
@@ -321,6 +344,7 @@ CLI_CONFIG = {
         "releases": lambda cli: releases(cli),
         "init": lambda cli: initialize(cli),
         "freeze": lambda cli: freeze(cli),
+        "makedeps": lambda cli: makedeps(cli),
         "help": lambda cli: __doc__,
         "config": lambda cli: f"""{PPM_NAME}
 Version: {PPM_VERSION}
