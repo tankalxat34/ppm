@@ -22,14 +22,6 @@ def calculate_bytes_size(iobytes: BytesIO):
     return (0, " BYTES")
 
 
-class TextTable:
-    def __init__(self, dataframe: dict | list) -> None:
-        self.df = dataframe
-
-    def log(self) -> None:
-        pass
-
-
 if __name__ == "__main__":
     # from .. import cli_config
     from site import getusersitepackages

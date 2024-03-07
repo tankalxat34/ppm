@@ -14,11 +14,6 @@ file ppm.config.json
 (с) tankalxat34
 
 All commands:
-    - ppm
-        - install [--version | --ignore]        download and setup new package
-        - uninstall                             remove existing package
-        - update                                download and setup actual version
-    - exit              exit from ppm
 """
 
 import json
@@ -27,40 +22,26 @@ import sys
 import pathlib
 import shutil
 from site import getusersitepackages
+from getpass import getuser
+from utils.constants import (
+    PPM_CONFIG_JSON,
+    PPM_CREATE_VENV_CMD,
+    PPM_GLOBAL_PATH,
+    PPM_NAME,
+    PPM_PROJECT_PATH,
+    PPM_VENV_PATH,
+    PPM_VERSION,
+    convertPackageName,
+    getSitePath,
+)
 
+from utils.ppm_config_parser.main import REQUIRES_DIST, PpmConfig
 from utils.pypi_api.main import PyPi
-from utils.cli.main import Cli
+from utils.cli.main import Cli, Prefix
 from utils.cli.tui import calculate_bytes_size
 from utils.package_parser.main import PackageParser
 from utils.package_parser.packaging.requirements import Requirement
 from utils.decorators.handlers import handle_KeyboardInterrupt
-
-USER_PLATFORM: str = sys.platform
-USER_VERSION_INFO = sys.version_info
-
-
-PPM_NAME = "Python Package Manager"
-PPM_VERSION = "1.2.0"
-PPM_CLI_TITLE = f"""{PPM_NAME} ({PPM_VERSION}) - {USER_PLATFORM} Python {USER_VERSION_INFO.major}.{USER_VERSION_INFO.minor}.{USER_VERSION_INFO.micro}"""
-
-PPM_DEFAULT_VENV_DIR_NAME = "venv"
-PPM_CREATE_VENV_CMD = f"python -m venv {PPM_DEFAULT_VENV_DIR_NAME}"
-PPM_CONFIG_JSON = "ppm.config.json"
-PPM_REQUIREMENTS_TXT = "requirements.txt"
-PPM_VENV_PATH = pathlib.Path(os.getcwd(), PPM_DEFAULT_VENV_DIR_NAME, "lib", "site-packages").absolute()
-PPM_PROJECT_PATH = (
-    pathlib.Path(os.getcwd(), "python_modules").absolute()
-    if not os.path.exists(PPM_VENV_PATH)
-    else PPM_VENV_PATH
-)
-PPM_GLOBAL_PATH = getusersitepackages()
-
-
-def convertPackageName(name: str):
-    REPLACE_MASK = {"-": "_"}
-    for frm, t in REPLACE_MASK.items():
-        result = name.replace(frm, t)
-    return result
 
 
 def loadPpmConfig() -> dict:
@@ -70,45 +51,61 @@ def loadPpmConfig() -> dict:
     return json.loads(content)
 
 
-def checkExtras(exParent, exCurrent):
-    for parent in exParent:
-        print("    Checking extra", parent, "in", exCurrent, parent in exCurrent)
-        if parent in exCurrent:
-            return True
-    return False
+def print_dict_with_indent(d, indent=0):
+    for key, value in d.items():
+        if isinstance(value, dict):
+            print(" " * indent + str(key) + ":")
+            print_dict_with_indent(value, indent + 2)
+        else:
+            print(" " * indent + str(key) + ": " + str(value))
 
 
-def getSitePath(cli: Cli) -> str | pathlib.Path:
-    """Returns path to `site-packages` dir when alias `-g` in CLI command"""
-    return PPM_GLOBAL_PATH if ("g" in cli.aliases) else PPM_PROJECT_PATH
-
-
-def install(
-    cli: Cli,
-    _installedPackages: list[str] = [],
-):
+def getInstalledPackages(cli: Cli) -> list[str]:
     PPM_PATH = getSitePath(cli)
+
+    listdir = os.listdir(PPM_PATH)
+    out_filter = list(
+        map(
+            lambda x: x.split("-")[0],
+            filter(lambda x: ".dist-info" in x, listdir),
+        )
+    )
+    return out_filter
+
+
+def install(cli: Cli, _installedPackages: list[str] = []):
+    PPM_PATH = getSitePath(cli)
+    CONFIG = PpmConfig()
     packages = cli.arguments[1:]
 
     if not len(packages):
-        raise NameError("You does not provide package names")
+        config_content = CONFIG.read()
+        joinedAliases = "-" + " -".join(cli.aliases)
+        requires_dist_cmd = (
+            f"ppm install {joinedAliases} {' '.join(config_content[REQUIRES_DIST])}"
+        )
+        return install(
+            Cli(requires_dist_cmd),
+            _installedPackages,
+        )
 
     for position, pack in enumerate(packages):
         requirement = Requirement(pack.replace(";", ""))
         package = requirement.name
 
-        # if _marker and _marker.evaluate()
-
         try:
-            if PackageParser(PPM_PATH, package.lower()).isInstalled():
-                print(
-                    f"Package '{package}' has been skipped because it's installed before"
+            if PackageParser(
+                PPM_PATH, convertPackageName(package.lower())
+            ).isInstalled():
+                Cli.stdout(
+                    f"Package '{package}' has been skipped because it's installed before",
+                    prefix=Prefix.INFO,
                 )
                 continue
         except Exception:
             pass
 
-        print(f"Collecting '{requirement}'")
+        Cli.stdout(f"Collecting '{requirement}'")
         pypi = PyPi(package)
         pypi.fetch()
         releases = pypi.releases()
@@ -120,16 +117,21 @@ def install(
                     version = release
                     break
 
-        print(f"  Installing {package}=={version}")
+        Cli.stdout(f"Installing {package}=={version}", level=1)
 
         archive = pypi.fetchArchive(version)
         archiveSize = calculate_bytes_size(archive)
-        print(f"  Package size is {(archiveSize)[0]}{archiveSize[1]}")
+        Cli.stdout(f"Package size is {(archiveSize)[0]}{archiveSize[1]}", level=1)
 
         pypi.upackArchive(archive, PPM_PATH)
 
-        print(f"  Successfully unpacked to '{PPM_PATH}'")
+        Cli.stdout(f"Successfully unpacked to '{PPM_PATH}'", level=1)
         _installedPackages.append(package + "-" + str(version))
+
+        if "no-strict-req" in cli.options:
+            CONFIG.addRequirement(requirement)
+        else:
+            CONFIG.addRequirement(Requirement(f"{package}=={str(version)}"))
 
         if pypi.json["info"]["requires_dist"] and (
             "no-deps" not in tuple(cli.options.keys())
@@ -166,13 +168,17 @@ def install(
 
 def uninstall(cli: Cli):
     PPM_PATH = getSitePath(cli)
+    CONFIG = PpmConfig()
+    ui_packages = cli.arguments[1:]
     packages = tuple(map(lambda x: convertPackageName(x), cli.arguments[1:]))
 
     if not len(packages):
         raise NameError("You does not provide package names")
 
-    for package in packages:
+    for i, package in enumerate(packages):
         packageParser = PackageParser(PPM_PATH, package)
+
+        CONFIG.uninstallRequirement(Requirement(package))
 
         distinfo = packageParser.getDistInfo()
         record = packageParser.getRecord()
@@ -187,11 +193,12 @@ def uninstall(cli: Cli):
         except Exception:
             pass
 
-        print(
-            f"  Package {package}=={''.join(metadata['Version'])} successfully deleted"
+        Cli.stdout(
+            f"Package {ui_packages[i]}=={''.join(metadata['Version'])} successfully deleted",
+            level=0,
         )
 
-    return f"Successfully uninstalled {' '.join(packages)}"
+    return f"Successfully uninstalled {' '.join(ui_packages)}"
 
 
 def view(cli: Cli):
@@ -222,9 +229,12 @@ def view(cli: Cli):
 
         return result + f"Installed to: {pathlib.Path(PPM_PATH, package)}"
     else:
-        listdir = os.listdir(PPM_PATH)
+        out_filter = getInstalledPackages(cli)
         return (
-            "\n".join(listdir) + f"\n" + "-" * 15 + f"\nTotal packages: {len(listdir)}"
+            "\n".join(out_filter)
+            + f"\n"
+            + "-" * 15
+            + f"\nTotal packages: {len(out_filter)}"
         )
 
 
@@ -235,7 +245,7 @@ def upgrade(cli: Cli):
     if not len(packages):
         raise NameError("You does not provide package names")
 
-    print(f"Updating packages {' '.join(packages)}")
+    Cli.stdout(f"Updating packages {' '.join(packages)}")
 
     uninstall(cli)
     install(cli)
@@ -259,29 +269,45 @@ def _createVenv(cli: Cli):
 def initialize(cli: Cli):
     PPM_PATH = getSitePath(cli)
     yesStatus = "y" in cli.aliases or "yes" in cli.options
-        
 
     if not os.path.exists(PPM_VENV_PATH):
-        userInputSetupVenv = Cli.stdin("Would you like to setup Python venv?", ["y", "n"], errorIfUnknownOption=True)
+        userInputSetupVenv = Cli.stdin(
+            "Would you like to setup Python venv?",
+            ["y", "n"],
+            errorIfUnknownOption=True,
+        )
         if userInputSetupVenv == "y":
-            print(f"Creating virtual environment using command '{PPM_CREATE_VENV_CMD}'")
+            Cli.stdout(
+                f"Creating virtual environment using command '{PPM_CREATE_VENV_CMD}'",
+                level=1,
+            )
             os.system(PPM_CREATE_VENV_CMD)
-            print(f"Virtual environment created at '{PPM_VENV_PATH}'")
+            Cli.stdout(f"Virtual environment created at '{PPM_VENV_PATH}'", level=1)
 
     userResp = {
-        "name": Cli.stdin("Project name", [os.path.basename(os.getcwd())], useDefault=yesStatus),
+        "name": Cli.stdin(
+            "Project name", [os.path.basename(os.getcwd())], useDefault=yesStatus
+        ),
         "version": Cli.stdin("Version", ["1.0.0"], useDefault=yesStatus),
         "main": Cli.stdin("Main script", ["main.py"], useDefault=yesStatus),
-        "has_requirements_txt": Cli.stdin("Do you want to dublicate project dependencies to 'requirements.txt'", ["y", 'n'], errorIfUnknownOption=True, useDefault=yesStatus),
         "summary": Cli.stdin("Summary", [""], useDefault=yesStatus),
         "keywords": Cli.stdin("Keywords", [""], useDefault=yesStatus),
-        "author": Cli.stdin("Author", [""], useDefault=yesStatus),
+        "author": Cli.stdin(
+            "Author",
+            [getuser() or "Unnamed Author <unnamed@email.com>"],
+            useDefault=yesStatus,
+        ),
         "license": Cli.stdin("License", ["ISC"], useDefault=yesStatus),
     }
 
     with open(PPM_CONFIG_JSON, "w") as config:
         config.write(json.dumps(userResp, indent=2))
     return f"Created {PPM_CONFIG_JSON} with content:\n" + json.dumps(userResp, indent=2)
+
+
+def freeze(cli: Cli):
+    CONFIG = PpmConfig()
+    return CONFIG.freeze(cli)
 
 
 CLI_CONFIG = {
@@ -294,6 +320,7 @@ CLI_CONFIG = {
         "view": lambda cli: view(cli),
         "releases": lambda cli: releases(cli),
         "init": lambda cli: initialize(cli),
+        "freeze": lambda cli: freeze(cli),
         "help": lambda cli: __doc__,
         "config": lambda cli: f"""{PPM_NAME}
 Version: {PPM_VERSION}

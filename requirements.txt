@@ -1,0 +1,12 @@
+axios==0.4.0
+click==8.1.7
+lxml==5.1.0
+requests==2.31.0
+charset-normalizer==3.3.2
+idna==3.6
+urllib3==2.2.1
+certifi==2024.2.2
+rich==13.7.1
+pygments==2.17.2
+markdown-it-py==3.0.0
+mdurl==0.1.2

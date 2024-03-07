@@ -9,6 +9,12 @@ https://dev.to/paulasantamaria/command-line-interfaces-structure-syntax-2533
 import re
 
 
+class Prefix(object):
+    INFO = "INFO"
+    WARGING = "WARN"
+    ERROR = "ERROR"
+
+
 class Cli:
     def __init__(self, commandString: str):
         cmdParts = commandString.split(" ")
@@ -34,21 +40,40 @@ class Cli:
                 self.arguments.append(arg)
 
     @staticmethod
+    def stdout(
+        *args,
+        level: int = 0,
+        intendSize: int = 2,
+        prefix: str = "",
+    ) -> None:
+        print(" " * intendSize * level, f"[{prefix}] " if prefix else "", *args, sep="")
+
+    @staticmethod
     def stdin(
-        message: str, options: list[str] = [], defaultOption: str | int= 0, errorIfUnknownOption: bool = False, useDefault: bool = False
+        message: str,
+        options: list[str] = [],
+        defaultOption: str | int = 0,
+        errorIfUnknownOption: bool = False,
+        useDefault: bool = False,
     ):
         """Custom input wrapper"""
         if type(defaultOption) == int:
             defaultOption = options[defaultOption]
 
-        if (useDefault):
+        if useDefault:
             return defaultOption
-        
-        response = input(f"{message} ({', '.join((map(lambda x: x.upper() if x == defaultOption else x, options)))})" + ": ") or defaultOption
-        
+
+        response = (
+            input(
+                f"{message} ({', '.join((map(lambda x: x.upper() if x == defaultOption else x, options)))})"
+                + ": "
+            )
+            or defaultOption
+        )
+
         if len(options) and (response not in options) and errorIfUnknownOption:
-            raise ValueError(f"Unknown option '{response}'") 
-        
+            raise ValueError(f"Unknown option '{response}'")
+
         return response
 
     def __str__(self) -> str:
@@ -57,7 +82,8 @@ class Cli:
 
 if __name__ == "__main__":
     # command = Cli('git commit -h --message="commit message" --file=text.txt')
-    command = Cli("ppm install importlib-metadata --no-deps")
-    print("no-deps" in command.options)
-
-    # print(command.__dict__)
+    # Cli.stdout("Hello world")
+    # Cli.stdout("Second", level=1)
+    # Cli.stdout("Third line", level=2)
+    # Cli.stdout("Fourth line", level=1)
+    print()
